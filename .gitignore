@@ -52,6 +52,9 @@ dmypy.json
 # Ruff / linting
 .ruff_cache/
 
+# Frontend lib/ is tracked (root lib/ pattern is Python-only)
+!frontend/lib/
+
 # Node.js / Next.js
 node_modules/
 .next/
