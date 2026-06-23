@@ -7,6 +7,7 @@ interface Props {
 }
 
 interface FieldProps {
+  id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -14,11 +15,14 @@ interface FieldProps {
   type?: string;
 }
 
-function Field({ label, value, onChange, placeholder, type = 'text' }: FieldProps) {
+function Field({ id, label, value, onChange, placeholder, type = 'text' }: FieldProps) {
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+      <label htmlFor={id} className="block text-xs font-medium text-slate-600 mb-1">
+        {label}
+      </label>
       <input
+        id={id}
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -47,22 +51,22 @@ export default function NDAForm({ formData, onChange }: Props) {
       <section>
         <SectionHeader>Party 1</SectionHeader>
         <div className="space-y-3">
-          <Field label="Company" value={formData.party1Company} onChange={(v) => update('party1Company', v)} placeholder="Acme Inc." />
-          <Field label="Signatory Name" value={formData.party1Name} onChange={(v) => update('party1Name', v)} placeholder="Jane Smith" />
-          <Field label="Title" value={formData.party1Title} onChange={(v) => update('party1Title', v)} placeholder="CEO" />
-          <Field label="Notice Address" value={formData.party1Address} onChange={(v) => update('party1Address', v)} placeholder="jane@acme.com" />
-          <Field label="Date" value={formData.party1Date} onChange={(v) => update('party1Date', v)} type="date" />
+          <Field id="p1-company" label="Company" value={formData.party1Company} onChange={(v) => update('party1Company', v)} placeholder="Acme Inc." />
+          <Field id="p1-name" label="Signatory Name" value={formData.party1Name} onChange={(v) => update('party1Name', v)} placeholder="Jane Smith" />
+          <Field id="p1-title" label="Title" value={formData.party1Title} onChange={(v) => update('party1Title', v)} placeholder="CEO" />
+          <Field id="p1-address" label="Notice Address" value={formData.party1Address} onChange={(v) => update('party1Address', v)} placeholder="jane@acme.com" />
+          <Field id="p1-date" label="Date" value={formData.party1Date} onChange={(v) => update('party1Date', v)} type="date" />
         </div>
       </section>
 
       <section>
         <SectionHeader>Party 2</SectionHeader>
         <div className="space-y-3">
-          <Field label="Company" value={formData.party2Company} onChange={(v) => update('party2Company', v)} placeholder="Beta Corp." />
-          <Field label="Signatory Name" value={formData.party2Name} onChange={(v) => update('party2Name', v)} placeholder="John Doe" />
-          <Field label="Title" value={formData.party2Title} onChange={(v) => update('party2Title', v)} placeholder="VP Business Development" />
-          <Field label="Notice Address" value={formData.party2Address} onChange={(v) => update('party2Address', v)} placeholder="john@beta.com" />
-          <Field label="Date" value={formData.party2Date} onChange={(v) => update('party2Date', v)} type="date" />
+          <Field id="p2-company" label="Company" value={formData.party2Company} onChange={(v) => update('party2Company', v)} placeholder="Beta Corp." />
+          <Field id="p2-name" label="Signatory Name" value={formData.party2Name} onChange={(v) => update('party2Name', v)} placeholder="John Doe" />
+          <Field id="p2-title" label="Title" value={formData.party2Title} onChange={(v) => update('party2Title', v)} placeholder="VP Business Development" />
+          <Field id="p2-address" label="Notice Address" value={formData.party2Address} onChange={(v) => update('party2Address', v)} placeholder="john@beta.com" />
+          <Field id="p2-date" label="Date" value={formData.party2Date} onChange={(v) => update('party2Date', v)} type="date" />
         </div>
       </section>
 
@@ -70,8 +74,11 @@ export default function NDAForm({ formData, onChange }: Props) {
         <SectionHeader>Agreement Terms</SectionHeader>
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Purpose</label>
+            <label htmlFor="purpose" className="block text-xs font-medium text-slate-600 mb-1">
+              Purpose
+            </label>
             <textarea
+              id="purpose"
               value={formData.purpose}
               onChange={(e) => update('purpose', e.target.value)}
               rows={3}
@@ -79,15 +86,16 @@ export default function NDAForm({ formData, onChange }: Props) {
             />
           </div>
 
-          <Field label="Effective Date" value={formData.effectiveDate} onChange={(v) => update('effectiveDate', v)} type="date" />
+          <Field id="effective-date" label="Effective Date" value={formData.effectiveDate} onChange={(v) => update('effectiveDate', v)} type="date" />
 
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-2">MNDA Term</label>
+          <fieldset className="border-0 p-0 m-0">
+            <legend className="block text-xs font-medium text-slate-600 mb-2">MNDA Term</legend>
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input
                   type="radio"
                   name="mndaTermType"
+                  value="expires"
                   checked={formData.mndaTermType === 'expires'}
                   onChange={() => update('mndaTermType', 'expires')}
                   className="accent-slate-700"
@@ -99,6 +107,7 @@ export default function NDAForm({ formData, onChange }: Props) {
                   value={formData.mndaTermYears}
                   onChange={(e) => update('mndaTermYears', e.target.value)}
                   disabled={formData.mndaTermType !== 'expires'}
+                  aria-label="MNDA term years"
                   className="w-14 border border-slate-200 rounded px-2 py-0.5 text-center text-sm disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-slate-400"
                 />
                 year(s)
@@ -107,6 +116,7 @@ export default function NDAForm({ formData, onChange }: Props) {
                 <input
                   type="radio"
                   name="mndaTermType"
+                  value="continues"
                   checked={formData.mndaTermType === 'continues'}
                   onChange={() => update('mndaTermType', 'continues')}
                   className="accent-slate-700"
@@ -114,15 +124,16 @@ export default function NDAForm({ formData, onChange }: Props) {
                 Continues until terminated
               </label>
             </div>
-          </div>
+          </fieldset>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-2">Term of Confidentiality</label>
+          <fieldset className="border-0 p-0 m-0">
+            <legend className="block text-xs font-medium text-slate-600 mb-2">Term of Confidentiality</legend>
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input
                   type="radio"
                   name="confidentialityTermType"
+                  value="period"
                   checked={formData.confidentialityTermType === 'period'}
                   onChange={() => update('confidentialityTermType', 'period')}
                   className="accent-slate-700"
@@ -133,6 +144,7 @@ export default function NDAForm({ formData, onChange }: Props) {
                   value={formData.confidentialityTermYears}
                   onChange={(e) => update('confidentialityTermYears', e.target.value)}
                   disabled={formData.confidentialityTermType !== 'period'}
+                  aria-label="Confidentiality term years"
                   className="w-14 border border-slate-200 rounded px-2 py-0.5 text-center text-sm disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-slate-400"
                 />
                 year(s) from Effective Date
@@ -141,6 +153,7 @@ export default function NDAForm({ formData, onChange }: Props) {
                 <input
                   type="radio"
                   name="confidentialityTermType"
+                  value="perpetuity"
                   checked={formData.confidentialityTermType === 'perpetuity'}
                   onChange={() => update('confidentialityTermType', 'perpetuity')}
                   className="accent-slate-700"
@@ -148,15 +161,17 @@ export default function NDAForm({ formData, onChange }: Props) {
                 In perpetuity
               </label>
             </div>
-          </div>
+          </fieldset>
 
           <Field
+            id="governing-law"
             label="Governing Law (State)"
             value={formData.governingLaw}
             onChange={(v) => update('governingLaw', v)}
             placeholder="Delaware"
           />
           <Field
+            id="jurisdiction"
             label="Jurisdiction"
             value={formData.jurisdiction}
             onChange={(v) => update('jurisdiction', v)}
@@ -164,8 +179,11 @@ export default function NDAForm({ formData, onChange }: Props) {
           />
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Modifications (optional)</label>
+            <label htmlFor="modifications" className="block text-xs font-medium text-slate-600 mb-1">
+              Modifications (optional)
+            </label>
             <textarea
+              id="modifications"
               value={formData.modifications}
               onChange={(e) => update('modifications', e.target.value)}
               rows={3}

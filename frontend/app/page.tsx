@@ -5,7 +5,10 @@ import NDAForm from '@/components/NDAForm';
 import NDAPreview from '@/components/NDAPreview';
 
 export default function Home() {
-  const [formData, setFormData] = useState<NDAFormData>(defaultFormData);
+  const [formData, setFormData] = useState<NDAFormData>(() => ({
+    ...defaultFormData,
+    effectiveDate: new Date().toISOString().split('T')[0],
+  }));
 
   return (
     <div className="h-full flex flex-col">

@@ -146,14 +146,12 @@ export default function NDAPreview({ formData }: Props) {
               </p>
             </div>
 
-            {(modifications || true) && (
-              <div>
-                <SectionTitle>MNDA Modifications</SectionTitle>
-                <p className="text-sm whitespace-pre-wrap">
-                  {modifications || <span className="text-slate-400 italic">None</span>}
-                </p>
-              </div>
-            )}
+            <div>
+              <SectionTitle>MNDA Modifications</SectionTitle>
+              <p className="text-sm whitespace-pre-wrap">
+                {modifications || <span className="text-slate-400 italic">None</span>}
+              </p>
+            </div>
           </div>
 
           <p className="text-sm mb-6">
@@ -264,12 +262,12 @@ export default function NDAPreview({ formData }: Props) {
                 This MNDA commences on the{' '}
                 <Fill value={displayEffectiveDate} label="Effective Date" />{' '}
                 and expires at the end of the{' '}
-                <span className={mndaTermText ? 'bg-amber-50 text-amber-900 px-0.5' : 'text-slate-400'}>
-                  {mndaTermText || '[MNDA Term]'}
+                <span className="bg-amber-50 text-amber-900 px-0.5">
+                  {mndaTermText}
                 </span>. Either party may terminate this MNDA for any or no reason upon written notice to the other
                 party. The Receiving Party's obligations relating to Confidential Information will survive for the{' '}
-                <span className={confidentialityTermText ? 'bg-amber-50 text-amber-900 px-0.5' : 'text-slate-400'}>
-                  {confidentialityTermText || '[Term of Confidentiality]'}
+                <span className="bg-amber-50 text-amber-900 px-0.5">
+                  {confidentialityTermText}
                 </span>, despite any expiration or termination of this MNDA.
               </p>
 
