@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { NDAFormData } from '@/lib/nda-data';
+import { DocumentType, DOCUMENT_DISPLAY_NAMES } from '@/lib/document-types';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -8,24 +8,39 @@ interface Message {
 }
 
 interface Props {
-  formData: NDAFormData;
-  onFieldsUpdate: (fields: Partial<NDAFormData>) => void;
+  docType: DocumentType | null;
+  formData: Record<string, string>;
+  onFieldsUpdate: (fields: Record<string, string>) => void;
+  onDocTypeSelected: (docType: DocumentType) => void;
 }
 
 const OPENING_MESSAGE: Message = {
   role: 'assistant',
   content:
-    "Hello! I'm here to help you draft a Mutual NDA. Let's start — what are the names of the two companies entering into this agreement?",
+    "Hello! I'm PreLegal, your AI legal assistant. What type of legal document do you need help creating today?",
 };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
-export default function ChatPanel({ formData, onFieldsUpdate }: Props) {
+export default function ChatPanel({ docType, formData, onFieldsUpdate, onDocTypeSelected }: Props) {
   const [messages, setMessages] = useState<Message[]>([OPENING_MESSAGE]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Reset conversation history when moving from pre-selection into a specific document type,
+  // so the field-gathering LLM only sees field-gathering turns, not the routing conversation.
+  const prevDocTypeRef = useRef<DocumentType | null>(null);
+  useEffect(() => {
+    if (docType !== null && prevDocTypeRef.current === null) {
+      setMessages([{
+        role: 'assistant',
+        content: `Great! Let's create your ${DOCUMENT_DISPLAY_NAMES[docType]}. To start, what are the names of the two parties involved?`,
+      }]);
+    }
+    prevDocTypeRef.current = docType;
+  }, [docType]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -43,12 +58,15 @@ export default function ChatPanel({ formData, onFieldsUpdate }: Props) {
     setError(null);
 
     try {
-      // Exclude the synthetic opening message — it was never sent by the LLM
       const apiMessages = nextMessages.filter((m) => m !== OPENING_MESSAGE);
       const res = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: apiMessages, current_fields: formData }),
+        body: JSON.stringify({
+          messages: apiMessages,
+          document_type: docType ?? null,
+          current_fields: docType ? formData : {},
+        }),
       });
 
       if (!res.ok) {
@@ -58,6 +76,10 @@ export default function ChatPanel({ formData, onFieldsUpdate }: Props) {
 
       const data = await res.json();
       setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
+
+      if (data.document_type) {
+        onDocTypeSelected(data.document_type as DocumentType);
+      }
 
       if (data.extracted_fields && Object.keys(data.extracted_fields).length > 0) {
         onFieldsUpdate(data.extracted_fields);

@@ -3,23 +3,23 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.routers.chat import _build_system_prompt
-from app.schemas import NDAFields
+from app.document_registry import build_system_prompt, build_pre_selection_prompt
+from app.schemas import NDAFields, BAAFields, DocumentType
 
 
-# ── Unit tests: system prompt builder ──────────────────────────────────────
+# ── Unit tests: NDA system prompt builder ────────────────────────────────────
 
 
 def test_system_prompt_lists_unfilled_fields():
     fields = NDAFields()
-    prompt = _build_system_prompt(fields)
+    prompt = build_system_prompt(DocumentType.mutual_nda, fields)
     assert "party1Company" in prompt
     assert "STILL NEEDED" in prompt
 
 
 def test_system_prompt_shows_filled_fields():
     fields = NDAFields(party1Company="Acme Inc.", party2Company="Beta Corp.")
-    prompt = _build_system_prompt(fields)
+    prompt = build_system_prompt(DocumentType.mutual_nda, fields)
     assert "Acme Inc." in prompt
     assert "ALREADY GATHERED" in prompt
 
@@ -46,14 +46,30 @@ def test_system_prompt_all_filled():
         jurisdiction="New Castle, DE",
         modifications="",
     )
-    prompt = _build_system_prompt(fields)
+    prompt = build_system_prompt(DocumentType.mutual_nda, fields)
     assert "All fields gathered" in prompt
+
+
+def test_system_prompt_baa():
+    fields = BAAFields()
+    prompt = build_system_prompt(DocumentType.baa, fields)
+    assert "Business Associate Agreement" in prompt
+    assert "provider" in prompt
+    assert "breachNotificationPeriod" in prompt
+
+
+def test_pre_selection_prompt_lists_all_types():
+    prompt = build_pre_selection_prompt()
+    for doc_type in ["mutual_nda", "baa", "csa", "dpa", "partnership",
+                     "pilot", "psa", "sla", "software_license",
+                     "ai_addendum", "design_partner"]:
+        assert doc_type in prompt
 
 
 # ── Integration tests: POST /api/chat ──────────────────────────────────────
 
 
-MOCK_LLM_RESPONSE = json.dumps({
+MOCK_NDA_LLM_RESPONSE = json.dumps({
     "reply": "Great! What are the signatories' names and titles?",
     "fields": {
         "party1Company": "Acme Inc.",
@@ -78,51 +94,163 @@ MOCK_LLM_RESPONSE = json.dumps({
     },
 })
 
+MOCK_BAA_LLM_RESPONSE = json.dumps({
+    "reply": "Got it. What is the BAA effective date?",
+    "fields": {
+        "provider": "HealthTech Inc.",
+        "company": "Hospital Corp.",
+        "baaEffectiveDate": None,
+        "agreement": None,
+        "breachNotificationPeriod": None,
+        "limitations": None,
+    },
+})
 
-def _make_mock_completion():
+MOCK_PRE_SELECTION_RESPONSE = json.dumps({
+    "reply": "You need a BAA — let me help you with that.",
+    "document_type": "baa",
+})
+
+MOCK_PRE_SELECTION_NO_TYPE = json.dumps({
+    "reply": "I can help with several documents. Could you clarify?",
+    "document_type": None,
+})
+
+
+def _make_mock_completion(content: str):
     mock_choice = MagicMock()
-    mock_choice.message.content = MOCK_LLM_RESPONSE
+    mock_choice.message.content = content
     mock_response = MagicMock()
     mock_response.choices = [mock_choice]
     return mock_response
 
 
-def test_chat_returns_reply_and_extracted_fields(client, monkeypatch):
+# ── NDA field-gathering tests ─────────────────────────────────────────────────
+
+
+def test_chat_nda_returns_reply_and_extracted_fields(client, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
-    with patch("app.routers.chat.acompletion", return_value=_make_mock_completion()):
+    with patch("app.routers.chat.acompletion",
+               return_value=_make_mock_completion(MOCK_NDA_LLM_RESPONSE)):
         res = client.post(
             "/api/chat",
             json={
                 "messages": [{"role": "user", "content": "Acme Inc. and Beta Corp."}],
+                "document_type": "mutual_nda",
                 "current_fields": {},
             },
         )
 
     assert res.status_code == 200
     data = res.json()
-    assert "reply" in data
     assert data["reply"] == "Great! What are the signatories' names and titles?"
     assert data["extracted_fields"]["party1Company"] == "Acme Inc."
     assert data["extracted_fields"]["party2Company"] == "Beta Corp."
+    assert data["document_type"] is None
 
 
-def test_chat_excludes_null_fields_from_extracted(client, monkeypatch):
+def test_chat_nda_excludes_null_fields(client, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
-    with patch("app.routers.chat.acompletion", return_value=_make_mock_completion()):
+    with patch("app.routers.chat.acompletion",
+               return_value=_make_mock_completion(MOCK_NDA_LLM_RESPONSE)):
         res = client.post(
             "/api/chat",
             json={
                 "messages": [{"role": "user", "content": "Acme and Beta"}],
+                "document_type": "mutual_nda",
                 "current_fields": {},
             },
         )
 
     data = res.json()
-    # Null fields must not appear in extracted_fields
     assert "party1Name" not in data["extracted_fields"]
     assert "governingLaw" not in data["extracted_fields"]
+
+
+# ── Pre-selection tests ───────────────────────────────────────────────────────
+
+
+def test_pre_selection_returns_document_type(client, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+    with patch("app.routers.chat.acompletion",
+               return_value=_make_mock_completion(MOCK_PRE_SELECTION_RESPONSE)):
+        res = client.post(
+            "/api/chat",
+            json={
+                "messages": [{"role": "user", "content": "I need a business associate agreement"}],
+                "document_type": None,
+                "current_fields": {},
+            },
+        )
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["reply"] == "You need a BAA — let me help you with that."
+    assert data["document_type"] == "baa"
+    assert data["extracted_fields"] is None
+
+
+def test_pre_selection_no_type_returns_null(client, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+    with patch("app.routers.chat.acompletion",
+               return_value=_make_mock_completion(MOCK_PRE_SELECTION_NO_TYPE)):
+        res = client.post(
+            "/api/chat",
+            json={
+                "messages": [{"role": "user", "content": "I need some legal help"}],
+            },
+        )
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["document_type"] is None
+    assert data["extracted_fields"] is None
+
+
+def test_pre_selection_omitting_document_type_defaults_to_pre_selection(client, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+    with patch("app.routers.chat.acompletion",
+               return_value=_make_mock_completion(MOCK_PRE_SELECTION_NO_TYPE)):
+        res = client.post(
+            "/api/chat",
+            json={
+                "messages": [{"role": "user", "content": "Hello"}],
+            },
+        )
+
+    assert res.status_code == 200
+
+
+# ── BAA field-gathering tests ─────────────────────────────────────────────────
+
+
+def test_chat_baa_returns_extracted_fields(client, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+    with patch("app.routers.chat.acompletion",
+               return_value=_make_mock_completion(MOCK_BAA_LLM_RESPONSE)):
+        res = client.post(
+            "/api/chat",
+            json={
+                "messages": [{"role": "user", "content": "HealthTech Inc. and Hospital Corp."}],
+                "document_type": "baa",
+                "current_fields": {},
+            },
+        )
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["extracted_fields"]["provider"] == "HealthTech Inc."
+    assert data["extracted_fields"]["company"] == "Hospital Corp."
+    assert "baaEffectiveDate" not in data["extracted_fields"]
+
+
+# ── Error handling tests ──────────────────────────────────────────────────────
 
 
 def test_chat_missing_api_key_returns_500(client, monkeypatch):
@@ -164,11 +292,13 @@ def test_chat_invalid_request_returns_422(client):
 def test_chat_accepts_partial_current_fields(client, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
-    with patch("app.routers.chat.acompletion", return_value=_make_mock_completion()):
+    with patch("app.routers.chat.acompletion",
+               return_value=_make_mock_completion(MOCK_NDA_LLM_RESPONSE)):
         res = client.post(
             "/api/chat",
             json={
                 "messages": [{"role": "user", "content": "Beta Corp."}],
+                "document_type": "mutual_nda",
                 "current_fields": {"party1Company": "Acme Inc."},
             },
         )
@@ -179,14 +309,14 @@ def test_chat_accepts_partial_current_fields(client, monkeypatch):
 def test_chat_malformed_llm_response_returns_502(client, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
-    bad_mock = _make_mock_completion()
-    bad_mock.choices[0].message.content = '{"not_valid_schema": true}'
+    bad_mock = _make_mock_completion('{"not_valid_schema": true}')
 
     with patch("app.routers.chat.acompletion", return_value=bad_mock):
         res = client.post(
             "/api/chat",
             json={
                 "messages": [{"role": "user", "content": "Hello"}],
+                "document_type": "mutual_nda",
                 "current_fields": {},
             },
         )
