@@ -8,7 +8,7 @@ The available documents are covered in the catalog.json file in the project root
 
 @catalog.json
 
-The current implementation is a static Next.js frontend with a Mutual NDA form prototype. AI chat, full document support, and user-facing authentication are not yet implemented.
+The current implementation is a static Next.js frontend with an AI chat interface for Mutual NDA creation. Full document support and user-facing authentication are not yet implemented.
 
 ## Development process
 
@@ -61,8 +61,27 @@ Backend available at http://localhost:8000
 - `scripts/` — start/stop for Mac, Linux, Windows
 - `SECRET_KEY` loaded from env; falls back to dev default if not set
 
+### PL-5 — AI chat for Mutual NDA (done)
+- `frontend/components/ChatPanel.tsx` — replaces the static form; AI gathers NDA fields conversationally and updates the live preview in real time
+- `backend/app/routers/chat.py` — async `POST /api/chat` endpoint (unauthenticated); calls `openrouter/openai/gpt-oss-120b` via LiteLLM + Cerebras with Structured Outputs
+- `backend/app/schemas.py` — `NDAFields`, `ChatMessage`, `ChatRequest`, `ChatLLMResponse` Pydantic schemas with input length limits
+- CORS origins configurable via `CORS_ORIGINS` env var (defaults to `http://localhost:3000` for dev)
+- `OPENROUTER_API_KEY` now passed from `.env` into the Docker container via `docker-compose.yml`
+- `litellm` added to `pyproject.toml` and `Dockerfile`
+- `backend/tests/` — 11 pytest tests for the chat endpoint
+- `frontend/.env.local` (gitignored) — set `NEXT_PUBLIC_API_URL=http://localhost:8000` for local dev with `npm run dev`
+
+### PL-6 — Multi-document support (done)
+- 11 additional legal document types now supported: BAA, CSA, DPA, Partnership, Pilot, PSA, SLA, Software License, AI Addendum, Design Partner (Mutual NDA continues to use its dedicated preview)
+- AI-asks-at-start flow: `POST /api/chat` first runs a pre-selection phase (no `document_type`) to identify which document the user needs; once identified, subsequent turns gather the relevant fields
+- `backend/app/document_registry.py` — per-document config registry with field descriptions, optional fields, and system prompt builder
+- `backend/app/schemas.py` — `DocumentType` enum plus one `*Fields` schema and one `*LLMResponse` schema per document type; Pydantic `Literal` types enforce enum values
+- `frontend/lib/document-types.ts` — shared TypeScript `DocumentType` union, `DEFAULT_FORM_DATA`, `TEMPLATE_PATHS`, and `VARIABLE_MAPS` (span name → field key)
+- `frontend/components/TemplateRenderer.tsx` — generic renderer for the 10 new doc types: fetches template markdown from `frontend/public/templates/`, parses `<span class="keyterms_link|coverpage_link|orderform_link|businessterms_link">Variable</span>` and substitutes `<Fill>` components with the gathered value
+- `frontend/components/DocumentPreview.tsx` — routes between `NDAPreview` (NDA) and `TemplateRenderer` (all others)
+- `frontend/public/templates/*.md` — copies of the Common Paper templates for client-side rendering
+- Chat conversation resets once a document type is selected so pre-selection turns do not pollute field-gathering context
+
 ### Not yet implemented
-- AI chat and LLM integration
 - Document generation and persistence
 - Authentication UI (sign up / sign in pages in the frontend)
-- Support for document types beyond the Mutual NDA prototype
