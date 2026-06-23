@@ -128,13 +128,14 @@ def _make_mock_completion(content: str):
 # ── NDA field-gathering tests ─────────────────────────────────────────────────
 
 
-def test_chat_nda_returns_reply_and_extracted_fields(client, monkeypatch):
+def test_chat_nda_returns_reply_and_extracted_fields(client, auth_headers, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
     with patch("app.routers.chat.acompletion",
                return_value=_make_mock_completion(MOCK_NDA_LLM_RESPONSE)):
         res = client.post(
             "/api/chat",
+            headers=auth_headers,
             json={
                 "messages": [{"role": "user", "content": "Acme Inc. and Beta Corp."}],
                 "document_type": "mutual_nda",
@@ -148,15 +149,18 @@ def test_chat_nda_returns_reply_and_extracted_fields(client, monkeypatch):
     assert data["extracted_fields"]["party1Company"] == "Acme Inc."
     assert data["extracted_fields"]["party2Company"] == "Beta Corp."
     assert data["document_type"] is None
+    # NDA save path: 2 of the 17 required fields were filled, so the row exists.
+    assert data["document_id"] is not None
 
 
-def test_chat_nda_excludes_null_fields(client, monkeypatch):
+def test_chat_nda_excludes_null_fields(client, auth_headers, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
     with patch("app.routers.chat.acompletion",
                return_value=_make_mock_completion(MOCK_NDA_LLM_RESPONSE)):
         res = client.post(
             "/api/chat",
+            headers=auth_headers,
             json={
                 "messages": [{"role": "user", "content": "Acme and Beta"}],
                 "document_type": "mutual_nda",
@@ -172,13 +176,14 @@ def test_chat_nda_excludes_null_fields(client, monkeypatch):
 # ── Pre-selection tests ───────────────────────────────────────────────────────
 
 
-def test_pre_selection_returns_document_type(client, monkeypatch):
+def test_pre_selection_returns_document_type(client, auth_headers, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
     with patch("app.routers.chat.acompletion",
                return_value=_make_mock_completion(MOCK_PRE_SELECTION_RESPONSE)):
         res = client.post(
             "/api/chat",
+            headers=auth_headers,
             json={
                 "messages": [{"role": "user", "content": "I need a business associate agreement"}],
                 "document_type": None,
@@ -191,15 +196,18 @@ def test_pre_selection_returns_document_type(client, monkeypatch):
     assert data["reply"] == "You need a BAA — let me help you with that."
     assert data["document_type"] == "baa"
     assert data["extracted_fields"] is None
+    # Pre-selection does NOT persist a draft.
+    assert data["document_id"] is None
 
 
-def test_pre_selection_no_type_returns_null(client, monkeypatch):
+def test_pre_selection_no_type_returns_null(client, auth_headers, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
     with patch("app.routers.chat.acompletion",
                return_value=_make_mock_completion(MOCK_PRE_SELECTION_NO_TYPE)):
         res = client.post(
             "/api/chat",
+            headers=auth_headers,
             json={
                 "messages": [{"role": "user", "content": "I need some legal help"}],
             },
@@ -211,13 +219,14 @@ def test_pre_selection_no_type_returns_null(client, monkeypatch):
     assert data["extracted_fields"] is None
 
 
-def test_pre_selection_omitting_document_type_defaults_to_pre_selection(client, monkeypatch):
+def test_pre_selection_omitting_document_type_defaults_to_pre_selection(client, auth_headers, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
     with patch("app.routers.chat.acompletion",
                return_value=_make_mock_completion(MOCK_PRE_SELECTION_NO_TYPE)):
         res = client.post(
             "/api/chat",
+            headers=auth_headers,
             json={
                 "messages": [{"role": "user", "content": "Hello"}],
             },
@@ -229,13 +238,14 @@ def test_pre_selection_omitting_document_type_defaults_to_pre_selection(client, 
 # ── BAA field-gathering tests ─────────────────────────────────────────────────
 
 
-def test_chat_baa_returns_extracted_fields(client, monkeypatch):
+def test_chat_baa_returns_extracted_fields(client, auth_headers, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
     with patch("app.routers.chat.acompletion",
                return_value=_make_mock_completion(MOCK_BAA_LLM_RESPONSE)):
         res = client.post(
             "/api/chat",
+            headers=auth_headers,
             json={
                 "messages": [{"role": "user", "content": "HealthTech Inc. and Hospital Corp."}],
                 "document_type": "baa",
@@ -253,11 +263,25 @@ def test_chat_baa_returns_extracted_fields(client, monkeypatch):
 # ── Error handling tests ──────────────────────────────────────────────────────
 
 
-def test_chat_missing_api_key_returns_500(client, monkeypatch):
+def test_chat_requires_authentication(client, monkeypatch):
+    """Without auth headers, the chat endpoint must return 401."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    res = client.post(
+        "/api/chat",
+        json={
+            "messages": [{"role": "user", "content": "Hello"}],
+            "current_fields": {},
+        },
+    )
+    assert res.status_code == 401
+
+
+def test_chat_missing_api_key_returns_500(client, auth_headers, monkeypatch):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
     res = client.post(
         "/api/chat",
+        headers=auth_headers,
         json={
             "messages": [{"role": "user", "content": "Hello"}],
             "current_fields": {},
@@ -268,12 +292,13 @@ def test_chat_missing_api_key_returns_500(client, monkeypatch):
     assert "OPENROUTER_API_KEY" in res.json()["detail"]
 
 
-def test_chat_llm_error_returns_502(client, monkeypatch):
+def test_chat_llm_error_returns_502(client, auth_headers, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
     with patch("app.routers.chat.acompletion", side_effect=RuntimeError("connection failed")):
         res = client.post(
             "/api/chat",
+            headers=auth_headers,
             json={
                 "messages": [{"role": "user", "content": "Hello"}],
                 "current_fields": {},
@@ -284,18 +309,19 @@ def test_chat_llm_error_returns_502(client, monkeypatch):
     assert "LLM error" in res.json()["detail"]
 
 
-def test_chat_invalid_request_returns_422(client):
-    res = client.post("/api/chat", json={"messages": "not-a-list"})
+def test_chat_invalid_request_returns_422(client, auth_headers):
+    res = client.post("/api/chat", headers=auth_headers, json={"messages": "not-a-list"})
     assert res.status_code == 422
 
 
-def test_chat_accepts_partial_current_fields(client, monkeypatch):
+def test_chat_accepts_partial_current_fields(client, auth_headers, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
     with patch("app.routers.chat.acompletion",
                return_value=_make_mock_completion(MOCK_NDA_LLM_RESPONSE)):
         res = client.post(
             "/api/chat",
+            headers=auth_headers,
             json={
                 "messages": [{"role": "user", "content": "Beta Corp."}],
                 "document_type": "mutual_nda",
@@ -306,7 +332,7 @@ def test_chat_accepts_partial_current_fields(client, monkeypatch):
     assert res.status_code == 200
 
 
-def test_chat_malformed_llm_response_returns_502(client, monkeypatch):
+def test_chat_malformed_llm_response_returns_502(client, auth_headers, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
     bad_mock = _make_mock_completion('{"not_valid_schema": true}')
@@ -314,6 +340,7 @@ def test_chat_malformed_llm_response_returns_502(client, monkeypatch):
     with patch("app.routers.chat.acompletion", return_value=bad_mock):
         res = client.post(
             "/api/chat",
+            headers=auth_headers,
             json={
                 "messages": [{"role": "user", "content": "Hello"}],
                 "document_type": "mutual_nda",
@@ -325,9 +352,10 @@ def test_chat_malformed_llm_response_returns_502(client, monkeypatch):
     assert "unexpected format" in res.json()["detail"]
 
 
-def test_chat_message_too_long_returns_422(client):
+def test_chat_message_too_long_returns_422(client, auth_headers):
     res = client.post(
         "/api/chat",
+        headers=auth_headers,
         json={
             "messages": [{"role": "user", "content": "x" * 4001}],
             "current_fields": {},

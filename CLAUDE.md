@@ -82,6 +82,18 @@ Backend available at http://localhost:8000
 - `frontend/public/templates/*.md` — copies of the Common Paper templates for client-side rendering
 - Chat conversation resets once a document type is selected so pre-selection turns do not pollute field-gathering context
 
+### PL-7 — Multi-user & final polish (done)
+- **Auth**: `POST /api/auth/signup`, `POST /api/auth/signin`, `GET /api/me`. Chat endpoint now requires `Bearer` token.
+- **Persistence**: `backend/app/models.py` adds `Document` (FK to `users`, JSON `fields_json`, denormalized `required_filled` / `required_total`, `UniqueConstraint(user_id, document_type)`). Auto-saves on every successful field-gathering chat turn. `idempotent` `create_all` creates the `documents` table on first launch; existing `users` rows preserved.
+- **Read API**: `GET /api/documents` (list, ordered by `updated_at DESC`), `GET /api/documents/by-type/{type}` (single), `GET /api/documents/{id}`. User isolation enforced — every query is `WHERE user_id = current_user.id`.
+- **Progress math** lives in `backend/app/services/documents.py`: `required_field_names(doc_type)` from the registry, `(filled, total)` stored on the row so list endpoint is a thin wrapper.
+- **Frontend**: `lib/api.ts` typed fetch wrapper with bearer-injection and 401 redirect, `lib/auth-context.tsx` (`AuthProvider` + `useAuth`), `components/RequireAuth.tsx`. Token in `localStorage`.
+- **Pages**: route groups `(auth)` and `(app)`. Public `/signin` and `/signup` pages with a centered `Card`. Protected `/` (chat + preview, supports `?doc=<type>` hydration) and `/documents` (My Documents list with progress bars and Continue buttons).
+- **Polish**: `components/ui/{Button,TextField,Card}` primitives. `<TopNav>` with user menu and sign-out. Persistent `<DisclaimerFooter>` on every page. Prominent amber `<DisclaimerBanner>` above the document preview.
+- **Tests**: 31 backend pytest tests (auth, documents isolation, progress counting), 71 frontend jest tests (rewritten `ChatPanel.test.tsx`, new `Button.test.tsx`, `DocumentsList.test.tsx`).
+
 ### Not yet implemented
-- Document generation and persistence
-- Authentication UI (sign up / sign in pages in the frontend)
+- Document deletion endpoint
+- Email verification, password reset, OAuth
+- Multi-device real-time sync
+- Document versioning / audit trail
