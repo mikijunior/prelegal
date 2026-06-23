@@ -26,7 +26,8 @@ RUN uv pip install --system --no-cache \
     "pydantic>=2.0.0" \
     "pydantic-settings>=2.0.0" \
     "aiofiles>=23.0.0" \
-    "email-validator>=2.0.0"
+    "email-validator>=2.0.0" \
+    "litellm>=1.0.0"
 
 # Copy backend app
 COPY backend/app ./app

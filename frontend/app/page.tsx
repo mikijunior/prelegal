@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { NDAFormData, defaultFormData } from '@/lib/nda-data';
-import NDAForm from '@/components/NDAForm';
+import ChatPanel from '@/components/ChatPanel';
 import NDAPreview from '@/components/NDAPreview';
 
 export default function Home() {
@@ -9,6 +9,10 @@ export default function Home() {
     ...defaultFormData,
     effectiveDate: new Date().toISOString().split('T')[0],
   }));
+
+  function handleFieldsUpdate(fields: Partial<NDAFormData>) {
+    setFormData((prev) => ({ ...prev, ...fields }));
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -19,8 +23,8 @@ export default function Home() {
       </header>
 
       <main className="flex flex-1 overflow-hidden">
-        <aside className="no-print w-96 shrink-0 overflow-y-auto border-r border-slate-200 bg-slate-50">
-          <NDAForm formData={formData} onChange={setFormData} />
+        <aside className="no-print w-96 shrink-0 overflow-hidden flex flex-col border-r border-slate-200 bg-white">
+          <ChatPanel formData={formData} onFieldsUpdate={handleFieldsUpdate} />
         </aside>
 
         <section className="flex-1 overflow-y-auto">
