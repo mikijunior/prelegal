@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - prelegal_data:/data
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-prelegal-dev-secret-change-in-production}
+    restart: unless-stopped
+
+volumes:
+  prelegal_data:
