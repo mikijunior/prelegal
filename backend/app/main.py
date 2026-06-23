@@ -1,6 +1,8 @@
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -8,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from app.database import get_db, init_db
 from app.models import User
 from app.auth import hash_password, verify_password, create_access_token, require_current_user
+from app.routers import chat
 from app.schemas import SignUpRequest, SignInRequest, TokenResponse, UserResponse
 
 STATIC_DIR = Path("/app/static")
@@ -20,6 +23,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="PreLegal API", lifespan=lifespan)
+
+_cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(chat.router, prefix="/api")
 
 
 @app.post("/api/auth/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
