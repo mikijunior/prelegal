@@ -8,7 +8,7 @@ The available documents are covered in the catalog.json file in the project root
 
 @catalog.json
 
-The current implementation supports all 11 document types via AI chat with full user authentication and document persistence.
+The current implementation is a static Next.js frontend with a Mutual NDA form prototype. AI chat, full document support, and user-facing authentication are not yet implemented.
 
 ## Development process
 
@@ -29,9 +29,9 @@ There is an OPENROUTER_API_KEY in the .env file in the project root.
 The entire project should be packaged into a Docker container.  
 The backend should be in backend/ and be a uv project, using FastAPI.  
 The frontend should be in frontend/  
-The database should use SQLLite and be created from scratch each time the Docker container is brought up, allowing for a users table with sign up and sign in.  
-Consider statically building the frontend and serving it via FastAPI, if that will work.  
-There should be scripts in scripts/ for:  
+The database uses SQLite at `/data/prelegal.db` (persisted via a Docker volume), with a `users` table for sign up and sign in. The database schema is created on container startup if it doesn't exist.  
+The frontend is statically exported (`next build` with `output: "export"`) and served by FastAPI from `/app/static`.  
+Scripts exist in scripts/ for:  
 ```bash
 # Mac
 scripts/start-mac.sh    # Start
@@ -46,3 +46,23 @@ scripts/start-windows.ps1
 scripts/stop-windows.ps1
 ```
 Backend available at http://localhost:8000
+
+## Implementation status
+
+### PL-4 — V1 foundation (done)
+- `backend/` — FastAPI uv project with SQLite auth
+  - `POST /api/auth/signup` — create account, returns JWT
+  - `POST /api/auth/signin` — sign in, returns JWT
+  - `GET /api/me` — returns current user (Bearer token required)
+  - `GET /api/health` — health check
+- `frontend/next.config.ts` — `output: "export"` for static build
+- `Dockerfile` — multi-stage: Node.js builds frontend, Python serves everything
+- `docker-compose.yml` — single container, `prelegal_data` volume for SQLite
+- `scripts/` — start/stop for Mac, Linux, Windows
+- `SECRET_KEY` loaded from env; falls back to dev default if not set
+
+### Not yet implemented
+- AI chat and LLM integration
+- Document generation and persistence
+- Authentication UI (sign up / sign in pages in the frontend)
+- Support for document types beyond the Mutual NDA prototype
