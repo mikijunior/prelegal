@@ -32,8 +32,26 @@ export default function DocumentPreview({ docType, formData }: Props) {
   }
 
   if (docType === 'mutual_nda') {
-    return <NDAPreview formData={toNDAFormData(formData)} />;
+    return (
+      <div className="flex flex-col h-full">
+        <DisclaimerBanner />
+        <NDAPreview formData={toNDAFormData(formData)} />
+      </div>
+    );
   }
 
-  return <TemplateRenderer docType={docType} formData={formData} />;
+  return (
+    <div className="flex flex-col h-full">
+      <DisclaimerBanner />
+      <TemplateRenderer docType={docType} formData={formData} />
+    </div>
+  );
+}
+
+function DisclaimerBanner() {
+  return (
+    <div className="no-print bg-amber-50 border-b border-amber-200 px-8 py-2 text-xs text-amber-900 text-center">
+      This is a draft and is subject to legal review before signing.
+    </div>
+  );
 }

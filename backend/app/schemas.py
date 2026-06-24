@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import Enum
 from typing import Literal, Optional
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -44,6 +45,33 @@ class DocumentType(str, Enum):
     software_license = "software_license"
     ai_addendum = "ai_addendum"
     design_partner = "design_partner"
+
+
+# ── Document persistence schemas (must be below DocumentType) ───────────────
+
+
+class ProgressInfo(BaseModel):
+    required_filled: int
+    required_total: int
+
+
+class DocumentListItem(BaseModel):
+    id: int
+    document_type: DocumentType
+    display_name: str
+    progress: ProgressInfo
+    updated_at: datetime
+
+
+class DocumentResponse(BaseModel):
+    id: int
+    document_type: DocumentType
+    fields: dict
+    progress: ProgressInfo
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 # ── Field schemas ────────────────────────────────────────────────────────────

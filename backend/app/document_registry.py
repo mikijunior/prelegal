@@ -426,3 +426,20 @@ def build_system_prompt(doc_type: DocumentType, current_fields: Any) -> str:
         config.optional_fields,
         current_fields,
     )
+
+
+# ── Helpers used by the documents persistence layer ─────────────────────────
+
+
+def required_field_names(doc_type: DocumentType) -> list[str]:
+    """Field keys that count toward completion. Excludes optional_fields."""
+    config = REGISTRY[doc_type]
+    return [
+        name
+        for name in config.fields_class.model_fields.keys()
+        if name not in config.optional_fields
+    ]
+
+
+def display_name_for(doc_type: DocumentType) -> str:
+    return REGISTRY[doc_type].display_name

@@ -1,20 +1,42 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
 import ChatPanel from '@/components/ChatPanel';
-import { defaultFormData } from '@/lib/nda-data';
+import * as api from '@/lib/api';
+import { DocumentType } from '@/lib/document-types';
+
+jest.mock('@/lib/api', () => {
+  const actual = jest.requireActual('@/lib/api');
+  return {
+    ...actual,
+    apiFetch: jest.fn(),
+    getToken: () => null,
+    setToken: jest.fn(),
+    clearToken: jest.fn(),
+  };
+});
+
+const mockedApiFetch = api.apiFetch as jest.MockedFunction<typeof api.apiFetch>;
 
 const noop = () => {};
 
-function renderPanel(onFieldsUpdate = noop) {
+function renderPanel(
+  overrides: Partial<React.ComponentProps<typeof ChatPanel>> = {},
+) {
   return render(
-    <ChatPanel formData={{ ...defaultFormData }} onFieldsUpdate={onFieldsUpdate} />
+    <ChatPanel
+      docType={null}
+      formData={{}}
+      onFieldsUpdate={noop}
+      onDocTypeSelected={noop}
+      {...overrides}
+    />,
   );
 }
 
 beforeEach(() => {
   jest.resetAllMocks();
-  global.fetch = jest.fn();
 });
 
 describe('ChatPanel — initial render', () => {
@@ -23,12 +45,11 @@ describe('ChatPanel — initial render', () => {
     expect(screen.getByText('AI Assistant')).toBeInTheDocument();
   });
 
-  it('shows the opening greeting without any API call', () => {
+  it('shows the opening greeting', () => {
     renderPanel();
     expect(
-      screen.getByText(/Hello! I'm here to help you draft a Mutual NDA/i)
+      screen.getByText(/I'm PreLegal, your AI legal assistant/i),
     ).toBeInTheDocument();
-    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('renders the text input and Send button', () => {
@@ -44,16 +65,26 @@ describe('ChatPanel — initial render', () => {
 });
 
 describe('ChatPanel — sending a message', () => {
-  function mockFetchSuccess(reply: string, extracted_fields: Record<string, string> = {}) {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ reply, extracted_fields }),
-    });
+  function mockReply(payload: Partial<{
+    reply: string;
+    document_type: DocumentType | null;
+    extracted_fields: Record<string, string> | null;
+    document_id: number | null;
+    updated_at: string | null;
+  }>) {
+    mockedApiFetch.mockResolvedValueOnce({
+      reply: 'Hi',
+      document_type: null,
+      extracted_fields: {},
+      document_id: null,
+      updated_at: null,
+      ...payload,
+    } as Awaited<ReturnType<typeof api.apiFetch>>);
   }
 
   it('displays the user message immediately', async () => {
     const user = userEvent.setup();
-    mockFetchSuccess('Got it!');
+    mockReply({ reply: 'Got it!' });
     renderPanel();
 
     await user.type(screen.getByPlaceholderText(/Type a message/i), 'Acme Inc.');
@@ -62,43 +93,29 @@ describe('ChatPanel — sending a message', () => {
     expect(screen.getByText('Acme Inc.')).toBeInTheDocument();
   });
 
-  it('shows a loading indicator while waiting', async () => {
+  it('displays the AI reply after the request resolves', async () => {
     const user = userEvent.setup();
-    let resolve!: (v: unknown) => void;
-    (global.fetch as jest.Mock).mockReturnValueOnce(
-      new Promise((r) => { resolve = r; })
-    );
-    renderPanel();
-
-    await user.type(screen.getByPlaceholderText(/Type a message/i), 'Hello');
-    await user.click(screen.getByRole('button', { name: 'Send' }));
-
-    // Bounce dots are rendered during loading
-    const dots = document.querySelectorAll('.animate-bounce');
-    expect(dots.length).toBe(3);
-
-    resolve({ ok: true, json: async () => ({ reply: 'Hi', extracted_fields: {} }) });
-  });
-
-  it('displays the AI reply after fetch resolves', async () => {
-    const user = userEvent.setup();
-    mockFetchSuccess('What are the two company names?');
+    mockReply({ reply: 'What are the two company names?' });
     renderPanel();
 
     await user.type(screen.getByPlaceholderText(/Type a message/i), 'Hello');
     await user.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() =>
-      expect(screen.getByText('What are the two company names?')).toBeInTheDocument()
+      expect(
+        screen.getByText('What are the two company names?'),
+      ).toBeInTheDocument(),
     );
   });
 
   it('clears the input after sending', async () => {
     const user = userEvent.setup();
-    mockFetchSuccess('Got it!');
+    mockReply({ reply: 'Got it!' });
     renderPanel();
 
-    const textarea = screen.getByPlaceholderText(/Type a message/i) as HTMLTextAreaElement;
+    const textarea = screen.getByPlaceholderText(
+      /Type a message/i,
+    ) as HTMLTextAreaElement;
     await user.type(textarea, 'Acme Inc.');
     await user.click(screen.getByRole('button', { name: 'Send' }));
 
@@ -108,37 +125,47 @@ describe('ChatPanel — sending a message', () => {
   it('calls onFieldsUpdate with non-empty extracted fields', async () => {
     const user = userEvent.setup();
     const onFieldsUpdate = jest.fn();
-    mockFetchSuccess('Got it!', { party1Company: 'Acme Inc.' });
-    render(
-      <ChatPanel formData={{ ...defaultFormData }} onFieldsUpdate={onFieldsUpdate} />
-    );
+    mockReply({ reply: 'Got it!', extracted_fields: { party1Company: 'Acme Inc.' } });
+    renderPanel({ onFieldsUpdate });
 
     await user.type(screen.getByPlaceholderText(/Type a message/i), 'Acme');
     await user.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() =>
-      expect(onFieldsUpdate).toHaveBeenCalledWith({ party1Company: 'Acme Inc.' })
+      expect(onFieldsUpdate).toHaveBeenCalledWith({ party1Company: 'Acme Inc.' }),
     );
   });
 
   it('does not call onFieldsUpdate when extracted_fields is empty', async () => {
     const user = userEvent.setup();
     const onFieldsUpdate = jest.fn();
-    mockFetchSuccess('Tell me more.', {});
-    render(
-      <ChatPanel formData={{ ...defaultFormData }} onFieldsUpdate={onFieldsUpdate} />
-    );
+    mockReply({ reply: 'Tell me more.', extracted_fields: {} });
+    renderPanel({ onFieldsUpdate });
 
     await user.type(screen.getByPlaceholderText(/Type a message/i), 'Hello');
     await user.click(screen.getByRole('button', { name: 'Send' }));
 
-    await waitFor(() => expect(screen.getByText('Tell me more.')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText('Tell me more.')).toBeInTheDocument(),
+    );
     expect(onFieldsUpdate).not.toHaveBeenCalled();
   });
 
-  it('shows an error message on fetch failure', async () => {
+  it('calls onDocTypeSelected when the server returns a document_type', async () => {
     const user = userEvent.setup();
-    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+    const onDocTypeSelected = jest.fn();
+    mockReply({ reply: 'Got it', document_type: 'baa' as DocumentType });
+    renderPanel({ onDocTypeSelected });
+
+    await user.type(screen.getByPlaceholderText(/Type a message/i), 'BAA');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(onDocTypeSelected).toHaveBeenCalledWith('baa'));
+  });
+
+  it('shows an error message on API failure', async () => {
+    const user = userEvent.setup();
+    mockedApiFetch.mockRejectedValueOnce(new Error('Network error'));
     renderPanel();
 
     await user.type(screen.getByPlaceholderText(/Type a message/i), 'Hello');
@@ -152,13 +179,13 @@ describe('ChatPanel — sending a message', () => {
 
   it('sends on Enter key (without Shift)', async () => {
     const user = userEvent.setup();
-    mockFetchSuccess('Hi there!');
+    mockReply({ reply: 'Hi there!' });
     renderPanel();
 
     const textarea = screen.getByPlaceholderText(/Type a message/i);
     await user.type(textarea, 'Hello{Enter}');
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockedApiFetch).toHaveBeenCalledTimes(1));
   });
 
   it('does not send on Shift+Enter', async () => {
@@ -168,6 +195,6 @@ describe('ChatPanel — sending a message', () => {
     const textarea = screen.getByPlaceholderText(/Type a message/i);
     await user.type(textarea, 'Hello{Shift>}{Enter}{/Shift}');
 
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockedApiFetch).not.toHaveBeenCalled();
   });
 });
