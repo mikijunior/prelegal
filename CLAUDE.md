@@ -90,7 +90,7 @@ Backend available at http://localhost:8000
 - **Frontend**: `lib/api.ts` typed fetch wrapper with bearer-injection and 401 redirect, `lib/auth-context.tsx` (`AuthProvider` + `useAuth`), `components/RequireAuth.tsx`. Token in `localStorage`.
 - **Pages**: route groups `(auth)` and `(app)`. Public `/signin` and `/signup` pages with a centered `Card`. Protected `/` (chat + preview, supports `?doc=<type>` hydration) and `/documents` (My Documents list with progress bars and Continue buttons).
 - **Polish**: `components/ui/{Button,TextField,Card}` primitives. `<TopNav>` with user menu and sign-out. Persistent `<DisclaimerFooter>` on every page. Prominent amber `<DisclaimerBanner>` above the document preview.
-- **Tests**: 31 backend pytest tests (auth, documents isolation, progress counting), 71 frontend jest tests (rewritten `ChatPanel.test.tsx`, new `Button.test.tsx`, `DocumentsList.test.tsx`).
+- **Tests**: 69 backend pytest tests (auth, chat, documents, document registry, services), 117 frontend jest tests (api, auth-context, TemplateRenderer, document-types, ChatPanel, NDAPreview, NDAForm, DocumentsList, Button, nda-data).
 
 ### Not yet implemented
 - Document deletion endpoint
